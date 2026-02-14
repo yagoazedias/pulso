@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS record_metadata CASCADE;
+--;;
+DROP TABLE IF EXISTS record CASCADE;

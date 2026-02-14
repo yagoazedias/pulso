@@ -1,0 +1,24 @@
+# User health data (SENSITIVE — never commit)
+data/
+*.xml
+*.zip
+*.gpx
+*.csv
+
+# Clojure / Leiningen
+target/
+classes/
+.lein-*
+.nrepl-port
+.clj-kondo/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.calva/
+
+# OS
+.DS_Store
+
+.lsp/.cache
