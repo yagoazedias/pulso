@@ -25,6 +25,7 @@
                   :password "postgres"}}
   :jvm-opts ["-Xmx512m" "-XX:+UseG1GC"]
   :test-paths ["test/unit"]
+  :resource-paths ["resources" "test-resources"]
   :profiles {:uberjar {:aot :all
                         :jvm-opts ["-Dclojure.compiler.direct-linking=true"]}
              :unit    {:test-paths ["test/unit"]
