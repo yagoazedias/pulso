@@ -184,6 +184,58 @@ Total:             37 tests
 Result:            ✓ All passing
 ```
 
+## Continuous Integration & Deployment
+
+Pulso uses GitHub Actions to automatically build, test, and verify code quality on every push and pull request.
+
+### Workflows
+
+**Build and Test** (`.github/workflows/tests.yml`)
+- Runs on: Push to `master`, `main`, `develop` and all pull requests
+- Steps:
+  1. Checkout code
+  2. Set up Java 21
+  3. Create PostgreSQL test database
+  4. Run syntax checks with `lein check`
+  5. Run unit tests (`lein with-profile +unit test`)
+  6. Run integration tests (`lein with-profile +integration test`)
+  7. Run combined test suite (`lein with-profile +unit,+integration test`)
+  8. Build uberjar
+  9. Upload build artifacts
+  10. Comment test results on pull requests
+
+**Docker Build** (`.github/workflows/docker.yml`)
+- Runs on: Push to `master`, `main` and pull requests when Docker files change
+- Steps:
+  1. Build Docker image with caching
+  2. Validate `docker-compose.yml`
+  3. Build all Docker services
+  4. Verify service configuration
+
+### Status Badges
+
+Add this to your README to display workflow status:
+
+```markdown
+![Build and Test](https://github.com/YOUR_USERNAME/pulso/actions/workflows/tests.yml/badge.svg)
+![Docker Build](https://github.com/YOUR_USERNAME/pulso/actions/workflows/docker.yml/badge.svg)
+```
+
+### Local Workflow Testing
+
+To test workflows locally before pushing, you can use [act](https://github.com/nektos/act):
+
+```bash
+# Install act
+brew install act
+
+# Run the tests workflow locally
+act -j test
+
+# Run the docker workflow locally
+act -j docker
+```
+
 ## Architecture
 
 Pulso uses a **single-pass streaming** approach to keep memory usage constant regardless of file size (runs with `-Xmx512m`):

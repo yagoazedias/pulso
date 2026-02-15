@@ -1,0 +1,62 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'resources/**'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'resources/**'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: pulso:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify image build
+        run: |
+          docker build -t pulso:test .
+          docker image inspect pulso:test
+
+  docker-compose:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: |
+          docker compose config -q
+
+      - name: Build services
+        run: |
+          docker compose build
+
+      - name: Verify services
+        run: |
+          docker compose ps -a || true
