@@ -9,6 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./resources/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
@@ -29,6 +30,21 @@ services:
     volumes:
       - ./data:/data
     command: ["--file", "/data/exportar.xml"]
+
+  metabase:
+    image: metabase/metabase:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: "5432"
+      MB_DB_USER: postgres
+      MB_DB_PASS: postgres
+      MB_DB_HOST: db
+    ports:
+      - "3000:3000"
 
 volumes:
   pgdata:
