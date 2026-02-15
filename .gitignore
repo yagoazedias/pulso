@@ -1,6 +1,7 @@
 # User health data (SENSITIVE — never commit)
 data/
 *.xml
+!test-resources/**/*.xml
 *.zip
 *.gpx
 *.csv
