@@ -8,6 +8,7 @@ Pulso streams a 1.5GB+ Apple Health XML export and loads it into a normalized Po
 
 - **Clojure** 1.12 with Leiningen
 - **PostgreSQL** 17 (via Docker)
+- **Metabase** — data visualization and analytics on top of PostgreSQL
 - **clojure.data.xml** — StAX-based streaming XML parser
 - **next.jdbc** + **HikariCP** — database access with connection pooling
 - **Migratus** — database migrations
@@ -149,6 +150,47 @@ pulso/
     └── loader/
         └── batch_test.clj
 ```
+
+## Analytics & Visualization with Metabase
+
+Pulso includes **Metabase**, an open-source business intelligence tool that allows you to explore and visualize your Apple Health data without writing SQL.
+
+### What is Metabase?
+
+Metabase provides an intuitive web interface to:
+- **Create interactive dashboards** — visualize trends, patterns, and metrics
+- **Explore data visually** — build queries with a point-and-click interface
+- **Ask questions** — compose complex queries without SQL knowledge
+- **Share insights** — create shareable reports and dashboards
+
+### Running Metabase
+
+When you run `docker compose up`, Metabase is automatically started and accessible at:
+
+```
+http://localhost:3000
+```
+
+**Initial setup:**
+1. Navigate to http://localhost:3000
+2. Create an admin account on the welcome screen
+3. Connect to the Pulso database:
+   - Database type: PostgreSQL
+   - Host: `db`
+   - Port: `5432`
+   - Database: `pulso`
+   - Username: `postgres`
+   - Password: `postgres`
+
+### Example Dashboards
+
+Here are some examples of what you can visualize with your Apple Health data:
+
+**Active Energy Burned vs Goal Energy Burned**
+![Active Energy Burned vs Goal](examples/Metabase-Active%20Energy%20Burned%20%20Vs%20Goal%20Energy%20Burned-15_02_2026%2C%2008_45_29.png)
+
+**Weekdays when Workout Routes were Added**
+![Workout Routes by Weekday](examples/Metabase-Weekdays%20when%20Workout%20Route%20were%20added-15_02_2026%2C%2008_47_36.png)
 
 ## Verification
 
