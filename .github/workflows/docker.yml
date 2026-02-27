@@ -4,18 +4,18 @@ on:
   push:
     branches: [ master, main ]
     paths:
-      - 'Dockerfile'
+      - 'apps/etl-clojure/Dockerfile'
       - 'docker-compose.yml'
-      - 'src/**'
-      - 'resources/**'
+      - 'apps/etl-clojure/src/**'
+      - 'apps/etl-clojure/resources/**'
       - '.github/workflows/docker.yml'
   pull_request:
     branches: [ master, main ]
     paths:
-      - 'Dockerfile'
+      - 'apps/etl-clojure/Dockerfile'
       - 'docker-compose.yml'
-      - 'src/**'
-      - 'resources/**'
+      - 'apps/etl-clojure/src/**'
+      - 'apps/etl-clojure/resources/**'
 
 jobs:
   docker:
