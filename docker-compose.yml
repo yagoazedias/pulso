@@ -18,8 +18,8 @@ services:
 
   app:
     build:
-      context: .
-      dockerfile: ./apps/etl-clojure/Dockerfile
+      context: ./apps/etl-clojure
+      dockerfile: Dockerfile
     depends_on:
       db:
         condition: service_healthy
