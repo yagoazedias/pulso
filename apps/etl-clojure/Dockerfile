@@ -1,4 +1,4 @@
-FROM clojure:latest AS builder
+FROM clojure:lein-jammy AS builder
 WORKDIR /app
 COPY project.clj .
 RUN lein deps

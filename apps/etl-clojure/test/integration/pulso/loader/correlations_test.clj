@@ -2,16 +2,14 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [pulso.test-helpers :refer [test-ds with-db-once with-db count-rows]]
             [pulso.loader.correlations :as correlations]
-            [pulso.loader.records :as records]
             [clojure.data.xml :as xml]))
 
 (use-fixtures :once with-db-once)
 (use-fixtures :each with-db)
 
 (deftest process-correlation-with-nested-records
-  (testing "Given correlation batchers, record batchers, and Correlation XML with 2 nested records + metadata"
+  (testing "Given correlation batchers and Correlation XML with 2 nested records + metadata"
     (let [corr-batchers (correlations/make-batchers @test-ds 10)
-          rec-batchers (records/make-batchers @test-ds 10)
           element (apply xml/element :Correlation
             {:type "HKCorrelationTypeIdentifierBloodPressure"
              :sourceName "iPhone"
@@ -41,10 +39,9 @@
                 :endDate "2025-01-15 10:00:00 -0300"}
                [(xml/element :MetadataEntry {:key "HKMetadataKeySourceSecondaryID" :value "source-2"})])])]
 
-      (testing "When process! is called on both batcher sets, then flush! is called"
-        (correlations/process! @test-ds corr-batchers rec-batchers element)
-        (correlations/flush! corr-batchers)
-        (records/flush! rec-batchers))
+      (testing "When process! is called, then flush! is called"
+        (correlations/process! @test-ds corr-batchers element)
+        (correlations/flush! @test-ds corr-batchers))
 
       (testing "Then 1 correlation, 2 records, 2 correlation_record join rows, and metadata in both tables"
         (is (= 1 (count-rows @test-ds "correlation")))
