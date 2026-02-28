@@ -45,13 +45,15 @@
       (testing "When process! is called"
         (records/process! @test-ds batchers element))
 
-      (testing "Then 1 record inserted immediately"
-        (is (= 1 (count-rows @test-ds "record"))))
+      (testing "Then record is in buffer (count=1), but 0 rows in DB until flush"
+        (is (= 0 (count-rows @test-ds "record")))
+        (is (= 1 ((:count (:record-with-meta batchers))))))
 
-      (testing "And when metadata batcher is flushed"
-        ((:flush! (:metadata batchers)))
+      (testing "And when flush! is called"
+        (records/flush! batchers)
 
-        (testing "Then 2 metadata rows are linked to record"
+        (testing "Then 1 record and 2 metadata rows are in DB"
+          (is (= 1 (count-rows @test-ds "record")))
           (is (= 2 (count-rows @test-ds "record_metadata"))))))))
 
 (deftest flush-clears-pending
