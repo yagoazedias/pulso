@@ -14,7 +14,7 @@
                        {:jdbcUrl          jdbc-url
                         :username         (:user db-spec)
                         :password         (:password db-spec)
-                        :maximumPoolSize  4})))
+                        :maximumPoolSize  10})))
 
 (defn migratus-config
   "Returns migratus configuration for the given datasource."

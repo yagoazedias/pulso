@@ -29,7 +29,7 @@ services:
       DB_PASSWORD: postgres
     volumes:
       - ./data:/data
-    command: ["--file", "/data/exportar.xml"]
+    command: ["--file", "/data/apple_health_export/exportar.xml"]
 
   metabase:
     image: metabase/metabase:latest

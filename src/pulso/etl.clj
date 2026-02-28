@@ -50,7 +50,7 @@
                 (swap! counters update :workouts inc))
 
             :Correlation
-            (do (correlations/process! ds corr-batchers record-batchers element)
+            (do (correlations/process! ds corr-batchers element)
                 (swap! counters update :correlations inc))
 
             :ActivitySummary
@@ -63,7 +63,7 @@
       ;; Flush remaining partial batches
       (records/flush! record-batchers)
       (workouts/flush! workout-batchers)
-      (correlations/flush! corr-batchers)
+      (correlations/flush! ds corr-batchers)
       ((:flush! activity-batcher))
 
       ;; Report
