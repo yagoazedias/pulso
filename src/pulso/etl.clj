@@ -10,65 +10,79 @@
             [pulso.loader.lookups :as lookups]))
 
 (defn execute!
-  "Runs the full ETL pipeline: parse XML → transform → load into PostgreSQL."
-  [ds xml-file batch-size]
-  (log/info "Starting ETL pipeline" {:file xml-file :batch-size batch-size})
-  (let [start (System/currentTimeMillis)]
+  "Runs the full ETL pipeline: parse XML → transform → load into PostgreSQL.
 
-    ;; Prepare: truncate for idempotency, reset caches
-    (db/truncate-all! ds)
-    (lookups/reset-caches!)
-    (profile/reset-state!)
+   Accepts an optional opts map:
+     :on-element - callback fn called with element keyword after each element is processed.
+                   When provided, the old log-every-100k progress reporting is disabled."
+  ([ds xml-file batch-size]
+   (execute! ds xml-file batch-size {}))
+  ([ds xml-file batch-size opts]
+   (log/info "Starting ETL pipeline" {:file xml-file :batch-size batch-size})
+   (let [start        (System/currentTimeMillis)
+         on-element   (:on-element opts)
+         use-log-progress (nil? on-element)
+         progress-every 100000]
 
-    ;; Initialize batchers
-    ;; TODO: this should be done in a more functional way, maybe a strategy pattern?
-    (let [record-batchers  (records/make-batchers ds batch-size)
-          workout-batchers (workouts/make-batchers ds batch-size)
-          corr-batchers    (correlations/make-batchers ds batch-size)
-          activity-batcher (activity/make-batcher ds batch-size)
-          counters         (atom {:records 0 :workouts 0 :correlations 0 :activities 0})
-          progress-every   100000]
+     ;; Prepare: truncate for idempotency, reset caches
+     (db/truncate-all! ds)
+     (lookups/reset-caches!)
+     (profile/reset-state!)
 
-      ;; Stream and process
-      (parser/parse-health-data xml-file
-        (fn [element _locale]
-          (case (:tag element)
-            :ExportDate
-            (profile/save-export-date! element)
+     ;; Initialize batchers
+     (let [record-batchers  (records/make-batchers ds batch-size)
+           workout-batchers (workouts/make-batchers ds batch-size)
+           corr-batchers    (correlations/make-batchers ds batch-size)
+           activity-batcher (activity/make-batcher ds batch-size)
+           counters         (atom {:records 0 :workouts 0 :correlations 0 :activities 0})]
 
-            :Me
-            (profile/save-profile! ds element _locale)
+       ;; Stream and process
+       (parser/parse-health-data xml-file
+         (fn [element _locale]
+           (case (:tag element)
+             :ExportDate
+             (do (profile/save-export-date! element)
+                 (when on-element (on-element :ExportDate)))
 
-            :Record
-            (do (records/process! ds record-batchers element)
-                (let [n (swap! counters update :records inc)]
-                  (when (zero? (mod (:records n) progress-every))
-                    (log/info "Progress:" (:records n) "records processed"))))
+             :Me
+             (do (profile/save-profile! ds element _locale)
+                 (when on-element (on-element :Me)))
 
-            :Workout
-            (do (workouts/process! ds workout-batchers element)
-                (swap! counters update :workouts inc))
+             :Record
+             (do (records/process! ds record-batchers element)
+                 (let [n (swap! counters update :records inc)]
+                   (when (and use-log-progress
+                              (zero? (mod (:records n) progress-every)))
+                     (log/info "Progress:" (:records n) "records processed")))
+                 (when on-element (on-element :Record)))
 
-            :Correlation
-            (do (correlations/process! ds corr-batchers element)
-                (swap! counters update :correlations inc))
+             :Workout
+             (do (workouts/process! ds workout-batchers element)
+                 (swap! counters update :workouts inc)
+                 (when on-element (on-element :Workout)))
 
-            :ActivitySummary
-            (do (activity/process! activity-batcher element)
-                (swap! counters update :activities inc))
+             :Correlation
+             (do (correlations/process! ds corr-batchers element)
+                 (swap! counters update :correlations inc)
+                 (when on-element (on-element :Correlation)))
 
-            ;; Skip unknown elements
-            (log/debug "Skipping element" {:tag (:tag element)}))))
+             :ActivitySummary
+             (do (activity/process! activity-batcher element)
+                 (swap! counters update :activities inc)
+                 (when on-element (on-element :ActivitySummary)))
 
-      ;; Flush remaining partial batches
-      (records/flush! record-batchers)
-      (workouts/flush! workout-batchers)
-      (correlations/flush! ds corr-batchers)
-      ((:flush! activity-batcher))
+             ;; Skip unknown elements
+             (log/debug "Skipping element" {:tag (:tag element)}))))
 
-      ;; Report
-      (let [elapsed  (- (System/currentTimeMillis) start)
-            counts   @counters]
-        (log/info "ETL complete!" (assoc counts :elapsed-ms elapsed
-                                                :elapsed-min (format "%.1f" (/ elapsed 60000.0))))
-        counts))))
+       ;; Flush remaining partial batches
+       (records/flush! record-batchers)
+       (workouts/flush! workout-batchers)
+       (correlations/flush! ds corr-batchers)
+       ((:flush! activity-batcher))
+
+       ;; Report
+       (let [elapsed  (- (System/currentTimeMillis) start)
+             counts   @counters]
+         (log/info "ETL complete!" (assoc counts :elapsed-ms elapsed
+                                                 :elapsed-min (format "%.1f" (/ elapsed 60000.0))))
+         counts)))))
