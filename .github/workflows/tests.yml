@@ -109,16 +109,20 @@ jobs:
             comment += '- Integration tests: Passed\n';
             comment += '- Uberjar build: Completed\n';
 
-            // Try to read coverage data
+            // Try to read coverage data (codecov.json uses arrays per file:
+            // null = not a code line, 0 = uncovered, >0 = hit count, true = partial)
             try {
               const codecov = JSON.parse(fs.readFileSync('target/coverage/codecov.json', 'utf8'));
               const coverage = codecov.coverage;
-              const totalLines = Object.values(coverage).reduce((sum, file) => {
-                return sum + Object.keys(file).length;
-              }, 0);
-              const coveredLines = Object.values(coverage).reduce((sum, file) => {
-                return sum + Object.values(file).filter(v => v > 0).length;
-              }, 0);
+              let totalLines = 0;
+              let coveredLines = 0;
+              for (const lines of Object.values(coverage)) {
+                for (const v of lines) {
+                  if (v === null) continue;
+                  totalLines++;
+                  if (v === true || v > 0) coveredLines++;
+                }
+              }
               const pct = totalLines > 0 ? ((coveredLines / totalLines) * 100).toFixed(1) : '0.0';
               comment += `\n### Coverage\n`;
               comment += `- Line coverage: **${pct}%** (${coveredLines}/${totalLines} lines)\n`;
