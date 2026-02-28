@@ -14,7 +14,8 @@
                  [ch.qos.logback/logback-classic "1.5.12"]]
   :main pulso.core
   :aot [pulso.core]
-  :plugins [[migratus-lein "0.7.3"]]
+  :plugins [[migratus-lein "0.7.3"]
+             [lein-cloverage "1.2.4"]]
   :migratus {:store :database
              :migration-dir "migrations"
              :db {:dbtype "postgresql"
@@ -31,4 +32,7 @@
              :unit    {:test-paths ["test/unit"]
                        :resource-paths ["test-resources"]}
              :integration {:test-paths ["test/integration"]
-                           :resource-paths ["test-resources"]}})
+                           :resource-paths ["test-resources"]}
+             :coverage {:test-paths ["test/unit" "test/integration"]
+                        :resource-paths ["test-resources"]
+                        :cloverage {:ns-exclude-regex [#"pulso\.core"]}}})

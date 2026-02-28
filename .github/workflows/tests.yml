@@ -73,6 +73,21 @@ jobs:
           DB_PASSWORD: postgres
         run: lein with-profile +unit,+integration test
 
+      - name: Run test coverage
+        run: lein with-profile +coverage cloverage --codecov --html --fail-threshold 0
+
+      - name: Save coverage report
+        if: always()
+        run: cp -r target/coverage /tmp/coverage-report
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: /tmp/coverage-report/
+          retention-days: 30
+
       - name: Build uberjar
         run: lein uberjar
 
@@ -86,24 +101,42 @@ jobs:
           retention-days: 30
 
       - name: Comment test results
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
 
-            // Try to read test output (optional - for enhanced reporting)
-            let comment = '## ✅ Build and Test Results\n\n';
-            comment += '- Unit tests: ✅ Passed\n';
-            comment += '- Integration tests: ✅ Passed\n';
-            comment += '- Uberjar build: ✅ Completed\n';
+            let comment = '## Build and Test Results\n\n';
+            comment += '- Unit tests: Passed\n';
+            comment += '- Integration tests: Passed\n';
+            comment += '- Uberjar build: Completed\n';
 
-            if (context.eventName === 'pull_request') {
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
+            // Try to read coverage data (codecov.json uses arrays per file:
+            // null = not a code line, 0 = uncovered, >0 = hit count, true = partial)
+            try {
+              const codecov = JSON.parse(fs.readFileSync('/tmp/coverage-report/codecov.json', 'utf8'));
+              const coverage = codecov.coverage;
+              let totalLines = 0;
+              let coveredLines = 0;
+              for (const lines of Object.values(coverage)) {
+                for (const v of lines) {
+                  if (v === null) continue;
+                  totalLines++;
+                  if (v === true || v > 0) coveredLines++;
+                }
+              }
+              const pct = totalLines > 0 ? ((coveredLines / totalLines) * 100).toFixed(1) : '0.0';
+              comment += `\n### Coverage\n`;
+              comment += `- Line coverage: **${pct}%** (${coveredLines}/${totalLines} lines)\n`;
+            } catch (e) {
+              comment += '\n- Coverage: not available\n';
             }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
