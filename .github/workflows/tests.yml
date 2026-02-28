@@ -76,12 +76,16 @@ jobs:
       - name: Run test coverage
         run: lein with-profile +coverage cloverage --codecov --html --fail-threshold 0
 
+      - name: Save coverage report
+        if: always()
+        run: cp -r target/coverage /tmp/coverage-report
+
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
-          path: target/coverage/
+          path: /tmp/coverage-report/
           retention-days: 30
 
       - name: Build uberjar
@@ -112,7 +116,7 @@ jobs:
             // Try to read coverage data (codecov.json uses arrays per file:
             // null = not a code line, 0 = uncovered, >0 = hit count, true = partial)
             try {
-              const codecov = JSON.parse(fs.readFileSync('target/coverage/codecov.json', 'utf8'));
+              const codecov = JSON.parse(fs.readFileSync('/tmp/coverage-report/codecov.json', 'utf8'));
               const coverage = codecov.coverage;
               let totalLines = 0;
               let coveredLines = 0;
