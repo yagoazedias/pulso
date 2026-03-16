@@ -3,6 +3,11 @@ import datetime
 import pytest
 from django.conf import settings
 
+# Module-level storage so the autouse fixture can access SQLite table name mappings
+# set up by django_db_setup.
+_SIMPLE_DB_TABLES = {}   # model -> simple name (for SQLite)
+_ORIGINAL_DB_TABLES = {}  # model -> original name (schema-qualified, for production)
+
 
 def pytest_configure():
     settings.DATABASES["default"] = {
@@ -21,23 +26,51 @@ def django_db_setup(django_test_environment, django_db_blocker):
 
     with django_db_blocker.unblock():
         unmanaged = []
-        original_db_tables = {}
         for model in apps.get_models():
             if not model._meta.managed:
                 model._meta.managed = True
                 unmanaged.append(model)
                 # SQLite does not support schema-qualified table names like
                 # '"public"."tablename"', so strip the schema prefix for tests.
-                original_db_tables[model] = model._meta.db_table
+                _ORIGINAL_DB_TABLES[model] = model._meta.db_table
                 if model._meta.db_table.startswith('"public".'):
                     simple_name = model._meta.db_table.split(".")[-1].strip('"')
+                    _SIMPLE_DB_TABLES[model] = simple_name
                     model._meta.db_table = simple_name
+
         try:
             call_command("migrate", "--run-syncdb", verbosity=0)
         finally:
+            # Restore original table names so model-level assertions still pass
+            # (test_models.py checks the production schema-qualified names).
+            # The _patch_db_table_for_sqlite autouse fixture re-applies simple
+            # names around each test that accesses the database.
             for model in unmanaged:
                 model._meta.managed = False
-                model._meta.db_table = original_db_tables[model]
+                model._meta.db_table = _ORIGINAL_DB_TABLES[model]
+
+
+@pytest.fixture(autouse=True)
+def _patch_db_table_for_sqlite(request):
+    """Temporarily replace schema-qualified table names with simple names
+    for SQLite compatibility whenever a test uses the database."""
+    uses_db = (
+        "db" in request.fixturenames
+        or "django_db" in request.keywords
+        or any(
+            name in request.fixturenames
+            for name in ("energy_data", "workout_data", "record_data")
+        )
+    )
+
+    if uses_db and _SIMPLE_DB_TABLES:
+        for model, name in _SIMPLE_DB_TABLES.items():
+            model._meta.db_table = name
+        yield
+        for model, name in _ORIGINAL_DB_TABLES.items():
+            model._meta.db_table = name
+    else:
+        yield
 
 
 @pytest.fixture
