@@ -1,8 +1,18 @@
 # Pulso
 
-Apple Health XML to PostgreSQL ETL pipeline built in Clojure.
+Apple Health XML to PostgreSQL ETL pipeline built in Clojure, with Django-based analytics dashboard (in development).
 
-Pulso streams a 1.5GB+ Apple Health XML export and loads it into a normalized PostgreSQL relational model. It handles 3.4M+ health records, 1,800+ workouts, activity summaries, correlations, and user profile data spanning years of health tracking.
+Pulso streams a 1.5GB+ Apple Health XML export and loads it into a normalized PostgreSQL relational model. It handles 3.4M+ health records, 1,800+ workouts, activity summaries, correlations, and user profile data spanning years of health tracking. The Django dashboard provides real-time analytics on top of this normalized data.
+
+## Monorepo Structure
+
+This is a monorepo containing both the ETL pipeline and analytics dashboard:
+
+- **`apps/etl-clojure/`** — Pulso ETL (Clojure + Leiningen)
+- **`apps/dashboard-django/`** — Django analytics dashboard (in development for Phase 2+)
+- **`infra/`** — Shared infrastructure (Docker, compose configs)
+- **`docs/`** — Project documentation
+- **`scripts/`** — Shared utility scripts
 
 ## Tech Stack
 
@@ -47,7 +57,8 @@ This will:
 # 1. Start PostgreSQL only
 docker compose up db
 
-# 2. Run migrations
+# 2. Navigate to the ETL app and run migrations
+cd apps/etl-clojure
 lein migratus migrate
 
 # 3. Run the ETL
@@ -118,6 +129,8 @@ The test database name can be overridden with `TEST_DB_NAME` environment variabl
 ### Running Tests
 
 ```bash
+cd apps/etl-clojure
+
 # Run only unit tests (fast, no database required)
 lein with-profile +unit test
 
@@ -280,42 +293,60 @@ Migrations are managed by Migratus and live in `resources/migrations/`.
 
 ```
 pulso/
-├── project.clj
-├── Dockerfile
-├── docker-compose.yml
-├── resources/migrations/       # SQL migration files (up/down)
-├── src/pulso/
-│   ├── core.clj                # CLI entry point
-│   ├── config.clj              # DB + app config
-│   ├── db.clj                  # Datasource, migrations, truncate
-│   ├── etl.clj                 # Orchestrator: parse -> transform -> load
-│   ├── xml/
-│   │   ├── parser.clj          # Streaming XML parser with element dispatch
-│   │   └── transform.clj       # XML elements -> Clojure maps
-│   └── loader/
-│       ├── batch.clj           # Generic batch insert machinery
-│       ├── lookups.clj         # Lookup table cache & upsert
-│       ├── records.clj         # Record + metadata loading
-│       ├── workouts.clj        # Workout + events + stats + routes
-│       ├── correlations.clj    # Correlation + nested records
-│       ├── activity.clj        # ActivitySummary loading
-│       └── profile.clj         # User profile (Me element)
-└── test/
-    ├── unit/pulso/
-    │   └── xml/
-    │       ├── parser_test.clj
-    │       └── transform_test.clj
-    └── integration/pulso/
-        ├── test_helpers.clj          # Shared test infrastructure
-        ├── etl_test.clj              # End-to-end pipeline tests
-        └── loader/
-            ├── batch_test.clj        # Batch processing tests
-            ├── lookups_test.clj      # Lookup caching tests
-            ├── profile_test.clj      # User profile tests
-            ├── records_test.clj      # Record loading tests
-            ├── workouts_test.clj     # Workout loading tests
-            ├── correlations_test.clj # Correlation tests
-            └── activity_test.clj     # Activity summary tests
+├── apps/
+│   ├── etl-clojure/                    # Pulso ETL pipeline (Clojure)
+│   │   ├── project.clj
+│   │   ├── Dockerfile
+│   │   ├── resources/migrations/       # SQL migration files (up/down)
+│   │   ├── src/pulso/
+│   │   │   ├── core.clj                # CLI entry point
+│   │   │   ├── config.clj              # DB + app config
+│   │   │   ├── db.clj                  # Datasource, migrations, truncate
+│   │   │   ├── etl.clj                 # Orchestrator: parse -> transform -> load
+│   │   │   ├── xml/
+│   │   │   │   ├── parser.clj          # Streaming XML parser with element dispatch
+│   │   │   │   └── transform.clj       # XML elements -> Clojure maps
+│   │   │   └── loader/
+│   │   │       ├── batch.clj           # Generic batch insert machinery
+│   │   │       ├── lookups.clj         # Lookup table cache & upsert
+│   │   │       ├── records.clj         # Record + metadata loading
+│   │   │       ├── workouts.clj        # Workout + events + stats + routes
+│   │   │       ├── correlations.clj    # Correlation + nested records
+│   │   │       ├── activity.clj        # ActivitySummary loading
+│   │   │       └── profile.clj         # User profile (Me element)
+│   │   └── test/
+│   │       ├── unit/pulso/
+│   │       │   └── xml/
+│   │       │       ├── parser_test.clj
+│   │       │       └── transform_test.clj
+│   │       └── integration/pulso/
+│   │           ├── test_helpers.clj    # Shared test infrastructure
+│   │           ├── etl_test.clj        # End-to-end pipeline tests
+│   │           └── loader/
+│   │               ├── batch_test.clj  # Batch processing tests
+│   │               ├── lookups_test.clj # Lookup caching tests
+│   │               ├── profile_test.clj # User profile tests
+│   │               ├── records_test.clj # Record loading tests
+│   │               ├── workouts_test.clj # Workout loading tests
+│   │               ├── correlations_test.clj # Correlation tests
+│   │               └── activity_test.clj # Activity summary tests
+│   └── dashboard-django/               # Django analytics dashboard (coming in Phase 2)
+│
+├── infra/
+│   ├── docker/
+│   └── compose/
+│
+├── docs/
+│   ├── specs/
+│   │   └── dashboard-v1.md             # Dashboard V1 specification
+│   └── ...
+│
+├── scripts/
+│   └── (shared utility scripts)
+│
+├── docker-compose.yml                  # Root compose file
+├── README.md
+└── ...
 ```
 
 ## Analytics & Visualization with Metabase

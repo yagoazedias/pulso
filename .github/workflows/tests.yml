@@ -54,12 +54,15 @@ jobs:
           psql -c "CREATE DATABASE pulso_test;"
 
       - name: Run linter and syntax checks
+        working-directory: ./apps/etl-clojure
         run: lein check
 
       - name: Run unit tests
+        working-directory: ./apps/etl-clojure
         run: lein with-profile +unit test
 
       - name: Run integration tests
+        working-directory: ./apps/etl-clojure
         env:
           DB_HOST: localhost
           DB_USER: postgres
@@ -67,6 +70,7 @@ jobs:
         run: lein with-profile +integration test
 
       - name: Run all tests (unit + integration)
+        working-directory: ./apps/etl-clojure
         env:
           DB_HOST: localhost
           DB_USER: postgres
@@ -89,6 +93,7 @@ jobs:
           retention-days: 30
 
       - name: Build uberjar
+        working-directory: ./apps/etl-clojure
         run: lein uberjar
 
       - name: Upload artifacts
@@ -97,7 +102,7 @@ jobs:
         with:
           name: build-artifacts
           path: |
-            target/pulso-*-standalone.jar
+            apps/etl-clojure/target/pulso-*-standalone.jar
           retention-days: 30
 
       - name: Comment test results

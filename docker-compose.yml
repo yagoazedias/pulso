@@ -9,7 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./resources/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./apps/etl-clojure/resources/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
@@ -17,7 +17,9 @@ services:
       retries: 5
 
   app:
-    build: .
+    build:
+      context: ./apps/etl-clojure
+      dockerfile: Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -45,6 +47,25 @@ services:
       MB_DB_HOST: db
     ports:
       - "3000:3000"
+
+  dashboard:
+    build:
+      context: ./apps/dashboard-django
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: pulso
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DJANGO_SETTINGS_MODULE: dashboard_project.settings
+      SECRET_KEY: change-me-in-production
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
 
 volumes:
   pgdata:
