@@ -112,3 +112,64 @@ class TestGetWorkoutVolume:
     def test_default_window_meta(self, repo, workout_data):
         result = repo.get_workout_volume()
         assert result["meta"]["window"] == "12w"
+
+
+class TestGetTopRecordTypes:
+    @pytest.mark.django_db
+    def test_returns_correct_structure(self, repo, record_data):
+        result = repo.get_top_record_types(start="2026-03-02", end="2026-03-15")
+        assert "labels" in result
+        assert "datasets" in result
+        assert "meta" in result
+
+    @pytest.mark.django_db
+    def test_types_ordered_by_volume(self, repo, record_data):
+        result = repo.get_top_record_types(start="2026-03-02", end="2026-03-15")
+        # HeartRate: 9 total, StepCount: 5 total, Distance: 1 total
+        assert result["datasets"][0]["label"] == "HKQuantityTypeIdentifierHeartRate"
+        assert result["datasets"][1]["label"] == "HKQuantityTypeIdentifierStepCount"
+        assert result["datasets"][2]["label"] == "HKQuantityTypeIdentifierDistanceWalkingRunning"
+
+    @pytest.mark.django_db
+    def test_weekly_bucketing(self, repo, record_data):
+        result = repo.get_top_record_types(start="2026-03-02", end="2026-03-15")
+        assert result["labels"] == ["2026-03-02", "2026-03-09"]
+        # HeartRate: week1=5, week2=4
+        assert result["datasets"][0]["data"] == [5, 4]
+        # StepCount: week1=3, week2=2
+        assert result["datasets"][1]["data"] == [3, 2]
+        # Distance: week1=1, week2=0
+        assert result["datasets"][2]["data"] == [1, 0]
+
+    @pytest.mark.django_db
+    def test_returns_max_5_types(self, repo, record_data):
+        result = repo.get_top_record_types(start="2026-03-02", end="2026-03-15")
+        assert len(result["datasets"]) <= 5
+
+    @pytest.mark.django_db
+    def test_fewer_than_5_types(self, repo, record_data):
+        """Fixture only has 3 types — should return 3 datasets."""
+        result = repo.get_top_record_types(start="2026-03-02", end="2026-03-15")
+        assert len(result["datasets"]) == 3
+
+    @pytest.mark.django_db
+    def test_empty_range(self, repo, record_data):
+        result = repo.get_top_record_types(start="2025-01-01", end="2025-01-07")
+        assert result["labels"] == []
+        assert result["datasets"] == []
+
+    @pytest.mark.django_db
+    def test_date_range_filtering(self, repo, record_data):
+        result = repo.get_top_record_types(start="2026-03-02", end="2026-03-08")
+        assert result["labels"] == ["2026-03-02"]
+
+    @pytest.mark.django_db
+    def test_meta_fields(self, repo, record_data):
+        result = repo.get_top_record_types(start="2026-03-02", end="2026-03-15")
+        assert result["meta"]["unit"] == "count"
+        assert result["meta"]["window"] == "custom"
+
+    @pytest.mark.django_db
+    def test_default_window_meta(self, repo, record_data):
+        result = repo.get_top_record_types()
+        assert result["meta"]["window"] == "12w"

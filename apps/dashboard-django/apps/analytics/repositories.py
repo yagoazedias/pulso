@@ -104,3 +104,77 @@ class PostgresMetricsRepository:
                 "last_updated": last_date,
             },
         }
+
+    def get_top_record_types(self, start=None, end=None):
+        from apps.analytics.models import Record
+
+        today = datetime.date.today()
+        is_default = start is None and end is None
+
+        if start is None:
+            start = (today - datetime.timedelta(weeks=12)).isoformat()
+        if end is None:
+            end = today.isoformat()
+
+        records = list(
+            Record.objects.filter(
+                start_date__gte=start,
+                start_date__lte=end + "T23:59:59",
+            ).select_related("record_type").order_by("start_date")
+        )
+
+        # Step 1: Count totals per type to find top 5
+        type_counts = {}
+        for r in records:
+            identifier = r.record_type.identifier
+            type_counts[identifier] = type_counts.get(identifier, 0) + 1
+
+        top_types = sorted(type_counts, key=type_counts.get, reverse=True)[:5]
+
+        if not top_types:
+            return {
+                "labels": [],
+                "datasets": [],
+                "meta": {
+                    "unit": "count",
+                    "window": "12w" if is_default else "custom",
+                    "last_updated": None,
+                },
+            }
+
+        # Step 2: Build weekly counts for top types
+        week_type_counts = {}
+        all_weeks = set()
+
+        for r in records:
+            identifier = r.record_type.identifier
+            if identifier not in top_types:
+                continue
+            dt = r.start_date.date() if hasattr(r.start_date, "date") else r.start_date
+            monday = dt - datetime.timedelta(days=dt.weekday())
+            key = monday.isoformat()
+            all_weeks.add(key)
+
+            if key not in week_type_counts:
+                week_type_counts[key] = {}
+            week_type_counts[key][identifier] = (
+                week_type_counts[key].get(identifier, 0) + 1
+            )
+
+        sorted_weeks = sorted(all_weeks)
+        last_date = sorted_weeks[-1] if sorted_weeks else None
+
+        datasets = []
+        for type_id in top_types:
+            data = [week_type_counts.get(w, {}).get(type_id, 0) for w in sorted_weeks]
+            datasets.append({"label": type_id, "data": data})
+
+        return {
+            "labels": sorted_weeks,
+            "datasets": datasets,
+            "meta": {
+                "unit": "count",
+                "window": "12w" if is_default else "custom",
+                "last_updated": last_date,
+            },
+        }
