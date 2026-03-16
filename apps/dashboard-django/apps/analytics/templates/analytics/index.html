@@ -1,9 +1,14 @@
+{% load django_vite %}
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Pulso Dashboard</title>
+    {% vite_hmr_client %}
 </head>
 <body>
     <div id="chart-root"></div>
+    {% vite_asset "src/main.jsx" %}
 </body>
 </html>
