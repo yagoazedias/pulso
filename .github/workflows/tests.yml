@@ -78,11 +78,12 @@ jobs:
         run: lein with-profile +unit,+integration test
 
       - name: Run test coverage
+        working-directory: ./apps/etl-clojure
         run: lein with-profile +coverage cloverage --codecov --html --fail-threshold 0
 
       - name: Save coverage report
         if: always()
-        run: cp -r target/coverage /tmp/coverage-report
+        run: cp -r apps/etl-clojure/target/coverage /tmp/coverage-report
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
