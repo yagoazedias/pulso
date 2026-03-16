@@ -48,5 +48,24 @@ services:
     ports:
       - "3000:3000"
 
+  dashboard:
+    build:
+      context: ./apps/dashboard-django
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: pulso
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DJANGO_SETTINGS_MODULE: dashboard_project.settings
+      SECRET_KEY: change-me-in-production
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+
 volumes:
   pgdata:
