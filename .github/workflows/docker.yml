@@ -5,20 +5,24 @@ on:
     branches: [ master, main ]
     paths:
       - 'apps/etl-clojure/Dockerfile'
+      - 'apps/dashboard-django/Dockerfile'
       - 'docker-compose.yml'
       - 'apps/etl-clojure/src/**'
       - 'apps/etl-clojure/resources/**'
+      - 'apps/dashboard-django/**'
       - '.github/workflows/docker.yml'
   pull_request:
     branches: [ master, main ]
     paths:
       - 'apps/etl-clojure/Dockerfile'
+      - 'apps/dashboard-django/Dockerfile'
       - 'docker-compose.yml'
       - 'apps/etl-clojure/src/**'
       - 'apps/etl-clojure/resources/**'
+      - 'apps/dashboard-django/**'
 
 jobs:
-  docker:
+  docker-etl:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,19 +32,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build ETL Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./apps/etl-clojure
           push: false
-          tags: pulso:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: pulso-etl:latest
+          cache-from: type=gha,scope=etl
+          cache-to: type=gha,mode=max,scope=etl
 
-      - name: Verify image build
-        run: |
-          docker build -t pulso:test .
-          docker image inspect pulso:test
+  docker-dashboard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Dashboard Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/dashboard-django
+          push: false
+          tags: pulso-dashboard:latest
+          cache-from: type=gha,scope=dashboard
+          cache-to: type=gha,mode=max,scope=dashboard
 
   docker-compose:
     runs-on: ubuntu-latest
@@ -50,13 +68,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate docker-compose.yml
-        run: |
-          docker compose config -q
+        run: docker compose config -q
 
-      - name: Build services
-        run: |
-          docker compose build
+      - name: Build all services
+        run: docker compose build
 
       - name: Verify services
-        run: |
-          docker compose ps -a || true
+        run: docker compose ps -a || true
