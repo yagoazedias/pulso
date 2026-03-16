@@ -19,6 +19,15 @@ classes/
 .vscode/
 .calva/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+staticfiles/
+
 # OS
 .DS_Store
 
