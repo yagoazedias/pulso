@@ -7,3 +7,5 @@ def pytest_configure():
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": ":memory:",
     }
+    settings.DEBUG = False
+    settings.DJANGO_VITE["default"]["dev_mode"] = False
