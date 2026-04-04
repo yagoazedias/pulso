@@ -142,3 +142,11 @@ frontend-test:
 - Runs in parallel with the existing `test` (ETL) job
 - Triggered on the same branches: `master`, `main`, `develop`
 - Include frontend test results in the PR comment (update the existing `actions/github-script` step)
+
+## Verification
+
+After implementation, run all tests locally and confirm everything passes:
+
+1. **Frontend tests:** `cd apps/dashboard-django && npm test` — all ~20 tests green
+2. **ETL tests:** `cd apps/etl-clojure && lein with-profile +unit test` — all 18 tests green
+3. **Vite build:** `cd apps/dashboard-django && npm run build` — no errors (ensures test setup doesn't break production build)
