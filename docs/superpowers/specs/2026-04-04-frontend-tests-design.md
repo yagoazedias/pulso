@@ -115,3 +115,30 @@ Each test file mocks `globalThis.fetch` via `vi.fn()`. Tests provide controlled 
 ### `useChartData` (in chart component tests)
 
 Chart component tests mock the `useChartData` hook via `vi.mock("../hooks/useChartData")` to return controlled states (loading, error, data) without needing to mock fetch.
+
+## CI/CD
+
+Add a `frontend-test` job to `.github/workflows/tests.yml` that runs alongside the existing ETL test job.
+
+### Job: `frontend-test`
+
+```yaml
+frontend-test:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+        cache: "npm"
+        cache-dependency-path: apps/dashboard-django/package-lock.json
+    - run: npm ci
+      working-directory: ./apps/dashboard-django
+    - run: npm test
+      working-directory: ./apps/dashboard-django
+```
+
+- No database or services needed — all tests are mocked
+- Runs in parallel with the existing `test` (ETL) job
+- Triggered on the same branches: `master`, `main`, `develop`
+- Include frontend test results in the PR comment (update the existing `actions/github-script` step)
