@@ -9,7 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./apps/etl-clojure/resources/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./infra/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
@@ -18,7 +18,7 @@ services:
 
   app:
     build:
-      context: ./apps/etl-clojure
+      context: ./apps/etl-python
       dockerfile: Dockerfile
     depends_on:
       db:
