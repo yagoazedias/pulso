@@ -2,6 +2,7 @@
 data/
 *.xml
 !test-resources/**/*.xml
+!apps/etl-python/tests/fixtures/*.xml
 *.zip
 *.gpx
 *.csv
@@ -27,6 +28,7 @@ __pycache__/
 dist/
 build/
 staticfiles/
+.venv/
 
 # OS
 .DS_Store

@@ -4,21 +4,21 @@ on:
   push:
     branches: [ master, main ]
     paths:
-      - 'apps/etl-clojure/Dockerfile'
+      - 'apps/etl-python/Dockerfile'
       - 'apps/dashboard-django/Dockerfile'
       - 'docker-compose.yml'
-      - 'apps/etl-clojure/src/**'
-      - 'apps/etl-clojure/resources/**'
+      - 'apps/etl-python/pulso/**'
+      - 'apps/etl-python/migrations/**'
       - 'apps/dashboard-django/**'
       - '.github/workflows/docker.yml'
   pull_request:
     branches: [ master, main ]
     paths:
-      - 'apps/etl-clojure/Dockerfile'
+      - 'apps/etl-python/Dockerfile'
       - 'apps/dashboard-django/Dockerfile'
       - 'docker-compose.yml'
-      - 'apps/etl-clojure/src/**'
-      - 'apps/etl-clojure/resources/**'
+      - 'apps/etl-python/pulso/**'
+      - 'apps/etl-python/migrations/**'
       - 'apps/dashboard-django/**'
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
       - name: Build ETL Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/etl-clojure
+          context: ./apps/etl-python
           push: false
           tags: pulso-etl:latest
           cache-from: type=gha,scope=etl
