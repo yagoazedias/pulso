@@ -4,7 +4,7 @@ import psycopg2.extras
 import pytest
 
 from pulso import config, db
-from pulso.loader import lookups
+from pulso.loader import lookups, profile
 
 TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "pulso_test")
 
@@ -34,11 +34,12 @@ def _migrate_once():
 
 @pytest.fixture
 def test_ds():
-    """Per-test: truncates all tables and resets the lookups cache before
-    handing back the connection pool."""
+    """Per-test: truncates all tables and resets the lookups cache and
+    profile state before handing back the connection pool."""
     pool = _get_pool()
     db.truncate_all(pool)
     lookups.reset_caches()
+    profile.reset_state()
     yield pool
 
 
