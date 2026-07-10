@@ -1099,11 +1099,13 @@ Expected: exits 0. Repeat for the other run if needed. If a run fails, inspect w
 
 - [ ] **Step 1: Transfer `yagoazedias/pulso` into the org**
 
+`gh repo transfer` is not a real subcommand (confirmed against `gh` v2.92.0 — `gh repo transfer --help` returns `unknown command "transfer" for "gh repo"`). Use the GitHub REST API's transfer endpoint directly via `gh api` instead:
+
 Run:
 ```bash
-gh repo transfer yagoazedias/pulso pulso-health-tracker
+gh api repos/yagoazedias/pulso/transfer -X POST -f new_owner=pulso-health-tracker --jq '{name, owner: .owner.login}'
 ```
-Expected: a confirmation prompt (`gh` will ask you to type the repo name to confirm) — type `pulso` to confirm. On success, output confirms the transfer. Since `yagoazedias` is an owner of `pulso-health-tracker`, the transfer completes immediately without needing a separate acceptance step.
+Expected: `{"name":"pulso","owner":"pulso-health-tracker"}`. This call is synchronous and requires no interactive confirmation. Since `yagoazedias` is an owner of `pulso-health-tracker`, the transfer completes immediately without needing a separate acceptance step.
 
 - [ ] **Step 2: Verify the transfer**
 
