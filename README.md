@@ -267,9 +267,9 @@ pulso/
 │   │   │   └── ui/
 │   │   │       └── terminal.py         # Live terminal progress renderer
 │   │   └── tests/
-│   │       ├── conftest.py             # Shared test infrastructure
 │   │       ├── unit/                   # Fast, no-DB tests
 │   │       └── integration/            # DB-backed tests (@pytest.mark.integration)
+│   │           └── conftest.py         # Shared test infrastructure
 │   └── dashboard-django/               # Django analytics dashboard (coming in Phase 2)
 │
 ├── infra/
