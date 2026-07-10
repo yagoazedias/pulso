@@ -70,6 +70,11 @@ def _run_with_progress(pool, xml_file, batch_size):
 
 
 def main(argv=None):
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
     arg_parser = _build_arg_parser()
     args = arg_parser.parse_args(argv)
 
