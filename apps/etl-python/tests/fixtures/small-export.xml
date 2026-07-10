@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HealthData locale="pt_BR">
+ <ExportDate value="2025-06-15 08:30:00 -0300"/>
+ <Me HKCharacteristicTypeIdentifierDateOfBirth="1998-10-11"
+     HKCharacteristicTypeIdentifierBiologicalSex="HKBiologicalSexMale"
+     HKCharacteristicTypeIdentifierBloodType="HKBloodTypeAPositive"
+     HKCharacteristicTypeIdentifierFitzpatrickSkinType="HKFitzpatrickSkinTypeIII"
+     HKCharacteristicTypeIdentifierCardioFitnessMedicationsUse="HKCardioFitnessMedicationsUseNone"/>
+ <Record type="HKQuantityTypeIdentifierHeartRate"
+         sourceName="Apple Watch"
+         sourceVersion="10.0"
+         unit="count/min"
+         value="72"
+         device="&lt;&lt;HKDevice: 0x123&gt;, name:Apple Watch, manufacturer:Apple Inc.&gt;"
+         creationDate="2025-01-15 10:30:00 -0300"
+         startDate="2025-01-15 10:30:00 -0300"
+         endDate="2025-01-15 10:30:00 -0300">
+  <MetadataEntry key="HKMetadataKeyHeartRateMotionContext" value="1"/>
+  <MetadataEntry key="HKMetadataKeyHeartRateSensorLocation" value="2"/>
+ </Record>
+ <Record type="HKQuantityTypeIdentifierActiveEnergyBurned"
+         sourceName="Apple Watch"
+         sourceVersion="10.0"
+         unit="kcal"
+         value="15.3"
+         device="&lt;&lt;HKDevice: 0x123&gt;, name:Apple Watch, manufacturer:Apple Inc.&gt;"
+         creationDate="2025-01-15 11:00:00 -0300"
+         startDate="2025-01-15 11:00:00 -0300"
+         endDate="2025-01-15 11:15:00 -0300"/>
+ <Workout workoutActivityType="HKWorkoutActivityTypeRunning"
+          duration="30.5"
+          durationUnit="min"
+          totalDistance="5.2"
+          totalDistanceUnit="km"
+          totalEnergyBurned="350.7"
+          totalEnergyBurnedUnit="kcal"
+          sourceName="Apple Watch"
+          sourceVersion="10.0"
+          device="&lt;&lt;HKDevice: 0x123&gt;, name:Apple Watch, manufacturer:Apple Inc.&gt;"
+          creationDate="2025-01-15 07:00:00 -0300"
+          startDate="2025-01-15 07:00:00 -0300"
+          endDate="2025-01-15 07:30:30 -0300">
+  <MetadataEntry key="HKIndoorWorkout" value="0"/>
+  <WorkoutEvent type="HKWorkoutEventTypePause"
+                date="2025-01-15 07:15:00 -0300"
+                duration="1.5"
+                durationUnit="min"/>
+  <WorkoutStatistics type="HKQuantityTypeIdentifierHeartRate"
+                     startDate="2025-01-15 07:00:00 -0300"
+                     endDate="2025-01-15 07:30:30 -0300"
+                     average="155.2"
+                     minimum="120.0"
+                     maximum="185.5"
+                     sum=""
+                     unit="count/min"/>
+  <WorkoutRoute sourceName="Apple Watch"
+                startDate="2025-01-15 07:00:00 -0300"
+                endDate="2025-01-15 07:30:30 -0300">
+   <FileReference path="/workout-routes/route_2025-01-15.gpx"/>
+  </WorkoutRoute>
+ </Workout>
+ <Correlation type="HKCorrelationTypeIdentifierBloodPressure"
+              sourceName="Omron"
+              sourceVersion="3.0"
+              device="&lt;&lt;HKDevice: 0x456&gt;, name:Omron, manufacturer:Omron Corp.&gt;"
+              creationDate="2025-01-15 08:00:00 -0300"
+              startDate="2025-01-15 08:00:00 -0300"
+              endDate="2025-01-15 08:00:00 -0300">
+  <MetadataEntry key="HKMetadataKeyWasUserEntered" value="1"/>
+  <Record type="HKQuantityTypeIdentifierBloodPressureSystolic"
+          sourceName="Omron"
+          sourceVersion="3.0"
+          unit="mmHg"
+          value="120"
+          device="&lt;&lt;HKDevice: 0x456&gt;, name:Omron, manufacturer:Omron Corp.&gt;"
+          creationDate="2025-01-15 08:00:00 -0300"
+          startDate="2025-01-15 08:00:00 -0300"
+          endDate="2025-01-15 08:00:00 -0300"/>
+  <Record type="HKQuantityTypeIdentifierBloodPressureDiastolic"
+          sourceName="Omron"
+          sourceVersion="3.0"
+          unit="mmHg"
+          value="80"
+          device="&lt;&lt;HKDevice: 0x456&gt;, name:Omron, manufacturer:Omron Corp.&gt;"
+          creationDate="2025-01-15 08:00:00 -0300"
+          startDate="2025-01-15 08:00:00 -0300"
+          endDate="2025-01-15 08:00:00 -0300"/>
+ </Correlation>
+ <ActivitySummary dateComponents="2025-01-15"
+                  activeEnergyBurned="450.5"
+                  activeEnergyBurnedGoal="500"
+                  activeEnergyBurnedUnit="kcal"
+                  appleMoveTime="35.2"
+                  appleMoveTimeGoal="30"
+                  appleExerciseTime="42.0"
+                  appleExerciseTimeGoal="30"
+                  appleStandHours="10"
+                  appleStandHoursGoal="12"/>
+</HealthData>
