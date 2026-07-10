@@ -54,18 +54,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          version: "latest"
 
-      - name: Install Leiningen
-        run: |
-          curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
-          chmod +x lein
-          sudo mv lein /usr/local/bin/
-          lein version
+      - name: Set up Python
+        working-directory: ./apps/etl-python
+        run: uv python install
+
+      - name: Install dependencies
+        working-directory: ./apps/etl-python
+        run: uv sync
 
       - name: Create test database
         env:
@@ -75,58 +75,25 @@ jobs:
         run: |
           psql -c "CREATE DATABASE pulso_test;"
 
-      - name: Run linter and syntax checks
-        working-directory: ./apps/etl-clojure
-        run: lein check
-
       - name: Run unit tests
-        working-directory: ./apps/etl-clojure
-        run: lein with-profile +unit test
+        working-directory: ./apps/etl-python
+        run: uv run pytest -m "not integration" -v
 
       - name: Run integration tests
-        working-directory: ./apps/etl-clojure
+        working-directory: ./apps/etl-python
         env:
           DB_HOST: localhost
           DB_USER: postgres
           DB_PASSWORD: postgres
-        run: lein with-profile +integration test
+        run: uv run pytest -m integration -v
 
       - name: Run all tests (unit + integration)
-        working-directory: ./apps/etl-clojure
+        working-directory: ./apps/etl-python
         env:
           DB_HOST: localhost
           DB_USER: postgres
           DB_PASSWORD: postgres
-        run: lein with-profile +unit,+integration test
-
-      - name: Run test coverage
-        working-directory: ./apps/etl-clojure
-        run: lein with-profile +coverage cloverage --codecov --html --fail-threshold 0
-
-      - name: Save coverage report
-        if: always()
-        run: cp -r apps/etl-clojure/target/coverage /tmp/coverage-report
-
-      - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: /tmp/coverage-report/
-          retention-days: 30
-
-      - name: Build uberjar
-        working-directory: ./apps/etl-clojure
-        run: lein uberjar
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: build-artifacts
-          path: |
-            apps/etl-clojure/target/pulso-*-standalone.jar
-          retention-days: 30
+        run: uv run pytest -v
 
       - name: Comment test results
         if: always() && github.event_name == 'pull_request'
@@ -134,34 +101,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-
-            let comment = '## Build and Test Results\n\n';
-            comment += '- Unit tests: Passed\n';
-            comment += '- Integration tests: Passed\n';
-            comment += '- Uberjar build: Completed\n';
-
-            // Try to read coverage data (codecov.json uses arrays per file:
-            // null = not a code line, 0 = uncovered, >0 = hit count, true = partial)
-            try {
-              const codecov = JSON.parse(fs.readFileSync('/tmp/coverage-report/codecov.json', 'utf8'));
-              const coverage = codecov.coverage;
-              let totalLines = 0;
-              let coveredLines = 0;
-              for (const lines of Object.values(coverage)) {
-                for (const v of lines) {
-                  if (v === null) continue;
-                  totalLines++;
-                  if (v === true || v > 0) coveredLines++;
-                }
-              }
-              const pct = totalLines > 0 ? ((coveredLines / totalLines) * 100).toFixed(1) : '0.0';
-              comment += `\n### Coverage\n`;
-              comment += `- Line coverage: **${pct}%** (${coveredLines}/${totalLines} lines)\n`;
-            } catch (e) {
-              comment += '\n- Coverage: not available\n';
-            }
-
+            const comment = '## Build and Test Results\n\n' +
+              '- Unit tests: Passed\n' +
+              '- Integration tests: Passed\n';
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
