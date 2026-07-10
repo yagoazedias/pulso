@@ -2,18 +2,25 @@
 
 ## 1. Objective
 
-Split the `pulso` monorepo into two standalone GitHub repositories, `pulso-etl` and `pulso-dashboard`, so each app's stack, tooling, CI, and release cadence are fully independent — no shared CI runs, no shared `docker-compose.yml`, no cross-app path filters.
+Split the `pulso` monorepo into two standalone GitHub repositories, `pulso-etl` and `pulso-dashboard`, owned by a new GitHub organization (`pulso-health`) instead of the personal `yagoazedias` account, so each app's stack, tooling, CI, and release cadence are fully independent — no shared CI runs, no shared `docker-compose.yml`, no cross-app path filters — and the project has a dedicated home separate from personal repos.
 
 This split executes **after** the ETL Clojure→Python migration (`docs/superpowers/plans/2026-07-09-etl-python-migration.md`) is complete and `apps/etl-clojure` is deleted, so `pulso-etl` is born as a pure Python repo with no Clojure history mixed into new code.
 
-## 2. Target Repositories
+**Status:** the migration precondition is already satisfied — `apps/etl-clojure` was removed and merged to `master` via PR #6 (2026-07-10).
 
-| Repo | Content | GitHub visibility |
+## 2. GitHub Organization
+
+Create a new GitHub organization, **`pulso-health`** (public, free tier), owned by `yagoazedias`. All three repos below live under it:
+
+| Repo | Content | Visibility |
 |---|---|---|
-| `pulso-etl` | ETL pipeline (Python), Postgres, migrations, Metabase | Public |
-| `pulso-dashboard` | Django app + Vite/React frontend | Public |
+| `pulso-health/pulso-etl` | ETL pipeline (Python), Postgres, migrations, Metabase | Public |
+| `pulso-health/pulso-dashboard` | Django app + Vite/React frontend | Public |
+| `pulso-health/pulso` | The old monorepo, transferred and archived (history/reference only) | Public, archived |
 
-No third "infra" repo. Each repo is self-sufficient to run standalone.
+Org creation itself has no `gh`/API path for a personal-account owner — it's a manual step via `https://github.com/organizations/new`. Everything downstream (repo creation, push, transfer, archive) is scriptable with `gh`.
+
+No third "infra" repo. `pulso-etl` and `pulso-dashboard` are each self-sufficient to run standalone.
 
 ### Ownership boundary
 
@@ -56,7 +63,7 @@ For each target repo:
 1. Clone the monorepo into a temp working copy.
 2. Run `git filter-repo` with one `--path` per file/directory that belongs to that repo (per §3), using `--path-rename apps/<app>/:` to flatten the app subdirectory to repo root, plus explicit `--path`/`--path-rename` entries for the root-level files (`AGENTS.md`, `PLAN.md`, `TEST_PLAN.md`, `DASHBOARD_MONOREPO_PLAN.md`, etc.) since those live outside `apps/*` and need individual handling.
 3. This preserves `git log`/`git blame` for everything that ever lived under the kept paths, including commits from before the monorepo reorganization (when the ETL app lived at the repo root).
-4. Push the filtered history to a new, empty GitHub repo (`pulso-etl` or `pulso-dashboard`).
+4. Push the filtered history to a new, empty GitHub repo (`pulso-health/pulso-etl` or `pulso-health/pulso-dashboard`).
 
 ## 5. CI/CD
 
@@ -66,18 +73,20 @@ Each new repo gets its own `tests.yml` and `docker.yml`, simplified from the cur
 - No `paths:` filters on the `docker.yml` trigger — the whole repo is one app, every push is relevant.
 - Job structure (lint → unit → integration → build → artifact) stays the same per app, just de-scoped from the sibling app's steps.
 
-## 6. Repo Creation & Old Repo Archival
+## 6. Org Setup, Repo Creation & Old Repo Archival
 
-1. Create `pulso-etl` and `pulso-dashboard` on GitHub (public), push extracted history to each.
-2. Verify CI is green on both new repos before touching the old one.
-3. Archive `yagoazedias/pulso`: replace `README.md` with a short notice ("this project was split into pulso-etl and pulso-dashboard") linking both new repos, commit, then `gh repo archive`.
+1. Create the `pulso-health` organization manually via `https://github.com/organizations/new` (public, free tier), owned by `yagoazedias`.
+2. Create `pulso-health/pulso-etl` and `pulso-health/pulso-dashboard` (`gh repo create pulso-health/<name> --public`), push each repo's extracted history (§4).
+3. Verify CI is green on both new repos before touching the old one.
+4. Transfer the old repo into the org: `gh repo transfer yagoazedias/pulso pulso-health` (requires accepting the transfer as an org owner).
+5. Archive `pulso-health/pulso`: replace `README.md` with a short notice ("this project was split into pulso-etl and pulso-dashboard") linking both new repos, commit, then `gh repo archive pulso-health/pulso`.
 
 ## 7. Execution Order
 
-1. Complete the ETL Clojure→Python migration in the current monorepo (existing plan, independent of this spec) — `apps/etl-clojure` deleted, `apps/etl-python` is the only ETL app.
-2. Execute this split: extract history, create repos, verify CI, archive the old repo.
+1. ~~Complete the ETL Clojure→Python migration~~ — **done** (PR #6 merged 2026-07-10, `apps/etl-clojure` removed).
+2. Execute this split: create the org, extract history, create repos, verify CI, transfer and archive the old repo.
 
-This spec is written now and executed once step 1 is done.
+This spec is written now; step 2 is ready to execute whenever desired.
 
 ## 8. Out of Scope
 
