@@ -1,6 +1,6 @@
 # Pulso
 
-Apple Health XML to PostgreSQL ETL pipeline built in Clojure, with Django-based analytics dashboard (in development).
+Apple Health XML to PostgreSQL ETL pipeline built in Python, with Django-based analytics dashboard (in development).
 
 Pulso streams a 1.5GB+ Apple Health XML export and loads it into a normalized PostgreSQL relational model. It handles 3.4M+ health records, 1,800+ workouts, activity summaries, correlations, and user profile data spanning years of health tracking. The Django dashboard provides real-time analytics on top of this normalized data.
 
@@ -8,7 +8,7 @@ Pulso streams a 1.5GB+ Apple Health XML export and loads it into a normalized Po
 
 This is a monorepo containing both the ETL pipeline and analytics dashboard:
 
-- **`apps/etl-clojure/`** — Pulso ETL (Clojure + Leiningen)
+- **`apps/etl-python/`** — Pulso ETL (Python + uv)
 - **`apps/dashboard-django/`** — Django analytics dashboard (in development for Phase 2+)
 - **`infra/`** — Shared infrastructure (Docker, compose configs)
 - **`docs/`** — Project documentation
@@ -16,12 +16,12 @@ This is a monorepo containing both the ETL pipeline and analytics dashboard:
 
 ## Tech Stack
 
-- **Clojure** 1.12 with Leiningen
+- **Python** 3.12, managed with **uv**
 - **PostgreSQL** 17 (via Docker)
 - **Metabase** — data visualization and analytics on top of PostgreSQL
-- **clojure.data.xml** — StAX-based streaming XML parser
-- **next.jdbc** + **HikariCP** — database access with connection pooling
-- **Migratus** — database migrations
+- **xml.etree.ElementTree** — streaming (iterparse) XML parser
+- **psycopg2** — database access with connection pooling
+- Custom SQL-file migration runner — tracks applied migrations in a `schema_migrations` table
 - **Docker** — multi-stage build for production deployment
 
 ## Prerequisites
@@ -30,8 +30,8 @@ This is a monorepo containing both the ETL pipeline and analytics dashboard:
 - An Apple Health XML export file (`exportar.xml`)
 
 For local development without Docker:
-- Java 21+
-- [Leiningen](https://leiningen.org/)
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)
 
 ## Quick Start
 
@@ -57,12 +57,12 @@ This will:
 # 1. Start PostgreSQL only
 docker compose up db
 
-# 2. Navigate to the ETL app and run migrations
-cd apps/etl-clojure
-lein migratus migrate
+# 2. Navigate to the ETL app and install dependencies
+cd apps/etl-python
+uv sync
 
-# 3. Run the ETL
-lein run -- --file /path/to/exportar.xml
+# 3. Run the ETL (migrations run automatically on startup)
+uv run python -m pulso.cli --file /path/to/exportar.xml
 ```
 
 ## Usage
@@ -96,21 +96,10 @@ Pulso includes comprehensive unit and integration tests to verify XML parsing, d
 
 ### Test Organization
 
-Tests are organized into two profiles, kept separate to enable focused testing:
+Tests are organized into two groups, kept separate via pytest markers to enable focused testing:
 
-- **Unit Tests** (`test/unit/`) — Fast, database-independent tests for XML parsing and transformation
-  - `pulso.xml.parser-test` — Streaming XML parser with element dispatch
-  - `pulso.xml.transform-test` — XML element transformation to Clojure maps
-
-- **Integration Tests** (`test/integration/`) — Database-dependent tests for batch processing, caching, and ETL pipeline
-  - `pulso.loader.batch-test` — Batch insert machinery and auto-flush behavior
-  - `pulso.loader.lookups-test` — Lookup table caching (source, device, record type, unit)
-  - `pulso.loader.profile-test` — User profile insertion
-  - `pulso.loader.records-test` — Health records with/without metadata, batching
-  - `pulso.loader.workouts-test` — Workouts with child records (metadata, events, statistics, routes)
-  - `pulso.loader.correlations-test` — Correlations with nested records
-  - `pulso.loader.activity-test` — Activity summary insertion
-  - `pulso.etl-test` — End-to-end ETL pipeline execution and idempotency
+- **Unit Tests** (`tests/unit/`) — Fast, database-independent tests for XML parsing and transformation
+- **Integration Tests** (`tests/integration/`, marked `@pytest.mark.integration`) — Database-dependent tests for batch processing, caching, and ETL pipeline
 
 ### Test Dependencies
 
@@ -124,78 +113,37 @@ docker compose up db
 docker compose exec db psql -U postgres -c "CREATE DATABASE pulso_test;"
 ```
 
-The test database name can be overridden with `TEST_DB_NAME` environment variable.
+The test database name can be overridden with the `TEST_DB_NAME` environment variable.
 
 ### Running Tests
 
 ```bash
-cd apps/etl-clojure
+cd apps/etl-python
 
 # Run only unit tests (fast, no database required)
-lein with-profile +unit test
+uv run pytest -m "not integration"
 
 # Run only integration tests (requires pulso_test database)
-lein with-profile +integration test
+DB_HOST=localhost DB_USER=postgres DB_PASSWORD=postgres uv run pytest -m integration
 
 # Run all tests (unit + integration)
-lein with-profile +unit,+integration test
+DB_HOST=localhost DB_USER=postgres DB_PASSWORD=postgres uv run pytest
 
-# Run a specific test namespace
-lein with-profile +integration test pulso.loader.batch-test
-
-# Run a specific test
-lein with-profile +integration test pulso.loader.batch-test/batcher-flushes-at-batch-size
+# Run a specific test file
+uv run pytest tests/integration/loader/test_batch.py -v
 ```
-
-### Test Structure & Patterns
-
-All integration tests follow a **Given-When-Then BDD pattern** for clarity:
-
-```clojure
-(deftest process-record-with-metadata
-  (testing "Given record batchers and Record XML element with metadata"
-    (let [batchers (records/make-batchers @test-ds 10)
-          element (apply xml/element :Record {...}
-                    [(xml/element :MetadataEntry {...})])]
-
-      (testing "When process! is called"
-        (records/process! @test-ds batchers element))
-
-      (testing "Then 1 record inserted immediately"
-        (is (= 1 (count-rows @test-ds "record")))))))
-```
-
-**Key testing principles:**
-
-- **Test isolation** — Each test is independent; the `:each` fixture truncates tables and resets caches before every test
-- **Database transactions** — Tests use the `pulso_test` database to avoid affecting production data
-- **Lazy datasource** — The test datasource is initialized lazily on first use
-- **Given-When-Then pattern** — Each test clearly shows setup, action, and assertions
 
 ### Test Infrastructure
 
-The `pulso.test-helpers` namespace provides shared utilities:
+`tests/integration/conftest.py` provides shared fixtures:
 
-- `test-ds` — HikariCP datasource connected to `pulso_test` database
-- `with-db-once` — `:once` fixture that runs migrations once per test run
-- `with-db` — `:each` fixture that:
-  - Truncates all tables
-  - Resets lookup caches (`pulso.loader.lookups/reset-caches!`)
-  - Resets export-date atom (`pulso.loader.profile/reset-state!`)
-- `count-rows` — Counts rows in a table
-- `select-all` — Selects all rows from a table
+- `test_ds` — connection pool fixture that truncates all tables and resets lookup/profile caches before each test
+- `count_rows` — counts rows in a table
+- `select_all` — selects all rows from a table
 
 ### Test Results
 
-Current test suite: **37 tests, 176 assertions**
-
-```
-Unit Tests:        18 tests
-Integration Tests: 19 tests
----
-Total:             37 tests
-Result:            ✓ All passing
-```
+Current test suite: **49 tests** (30 unit + 19 integration), all passing.
 
 ## Continuous Integration & Deployment
 
@@ -271,7 +219,7 @@ Pulso uses a **single-pass streaming** approach to keep memory usage constant re
 
 **Key design decisions:**
 
-- **Streaming XML** via `clojure.data.xml/parse` (StAX) — children of the root element are lazy sequences, so only one element is in memory at a time
+- **Streaming XML** via `xml.etree.ElementTree.iterparse` — each processed top-level child is removed from the root element's children list, so only one element is retained in memory at a time
 - **Lookup caching** — source, device, record type, and unit tables are cached in atoms (~50-100 unique values). Cache misses trigger `INSERT ON CONFLICT ... RETURNING id`
 - **Batch inserts** — records are accumulated in a buffer and flushed via `next.jdbc/execute-batch!` every 5,000 rows
 - **Idempotent loads** — all tables are truncated before each run (v1 strategy)
@@ -287,49 +235,41 @@ The schema is normalized into lookup/dimension tables, fact tables, and child ta
 - **Correlations:** `correlation`, `correlation_metadata`, `correlation_record`
 - **Activity:** `activity_summary`
 
-Migrations are managed by Migratus and live in `resources/migrations/`.
+Migrations are plain SQL files applied by a small custom runner (tracked in a `schema_migrations` table) and live in `apps/etl-python/migrations/`.
 
 ## Project Structure
 
 ```
 pulso/
 ├── apps/
-│   ├── etl-clojure/                    # Pulso ETL pipeline (Clojure)
-│   │   ├── project.clj
+│   ├── etl-python/                     # Pulso ETL pipeline (Python)
+│   │   ├── pyproject.toml
 │   │   ├── Dockerfile
-│   │   ├── resources/migrations/       # SQL migration files (up/down)
-│   │   ├── src/pulso/
-│   │   │   ├── core.clj                # CLI entry point
-│   │   │   ├── config.clj              # DB + app config
-│   │   │   ├── db.clj                  # Datasource, migrations, truncate
-│   │   │   ├── etl.clj                 # Orchestrator: parse -> transform -> load
+│   │   ├── migrations/                 # SQL migration files (up only)
+│   │   ├── pulso/
+│   │   │   ├── cli.py                  # CLI entry point
+│   │   │   ├── config.py               # DB + app config
+│   │   │   ├── db.py                   # Pool, migrations runner, truncate
+│   │   │   ├── etl.py                  # Orchestrator: parse -> transform -> load
+│   │   │   ├── progress.py             # Progress state tracking
 │   │   │   ├── xml/
-│   │   │   │   ├── parser.clj          # Streaming XML parser with element dispatch
-│   │   │   │   └── transform.clj       # XML elements -> Clojure maps
-│   │   │   └── loader/
-│   │   │       ├── batch.clj           # Generic batch insert machinery
-│   │   │       ├── lookups.clj         # Lookup table cache & upsert
-│   │   │       ├── records.clj         # Record + metadata loading
-│   │   │       ├── workouts.clj        # Workout + events + stats + routes
-│   │   │       ├── correlations.clj    # Correlation + nested records
-│   │   │       ├── activity.clj        # ActivitySummary loading
-│   │   │       └── profile.clj         # User profile (Me element)
-│   │   └── test/
-│   │       ├── unit/pulso/
-│   │       │   └── xml/
-│   │       │       ├── parser_test.clj
-│   │       │       └── transform_test.clj
-│   │       └── integration/pulso/
-│   │           ├── test_helpers.clj    # Shared test infrastructure
-│   │           ├── etl_test.clj        # End-to-end pipeline tests
-│   │           └── loader/
-│   │               ├── batch_test.clj  # Batch processing tests
-│   │               ├── lookups_test.clj # Lookup caching tests
-│   │               ├── profile_test.clj # User profile tests
-│   │               ├── records_test.clj # Record loading tests
-│   │               ├── workouts_test.clj # Workout loading tests
-│   │               ├── correlations_test.clj # Correlation tests
-│   │               └── activity_test.clj # Activity summary tests
+│   │   │   │   ├── parser.py           # Streaming XML parser with element dispatch
+│   │   │   │   ├── counter.py          # Fast element counter for progress totals
+│   │   │   │   └── transform.py        # XML elements -> Python dicts
+│   │   │   ├── loader/
+│   │   │   │   ├── batch.py            # Generic batch insert machinery
+│   │   │   │   ├── lookups.py          # Lookup table cache & upsert
+│   │   │   │   ├── records.py          # Record + metadata loading
+│   │   │   │   ├── workouts.py         # Workout + events + stats + routes
+│   │   │   │   ├── correlations.py     # Correlation + nested records
+│   │   │   │   ├── activity.py         # ActivitySummary loading
+│   │   │   │   └── profile.py          # User profile (Me element)
+│   │   │   └── ui/
+│   │   │       └── terminal.py         # Live terminal progress renderer
+│   │   └── tests/
+│   │       ├── conftest.py             # Shared test infrastructure
+│   │       ├── unit/                   # Fast, no-DB tests
+│   │       └── integration/            # DB-backed tests (@pytest.mark.integration)
 │   └── dashboard-django/               # Django analytics dashboard (coming in Phase 2)
 │
 ├── infra/
