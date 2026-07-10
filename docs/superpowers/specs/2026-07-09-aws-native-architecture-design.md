@@ -35,7 +35,7 @@ Three shapes were considered:
 | `db` service (Postgres 17) | **Aurora Serverless v2 (PostgreSQL-compatible)** | Only AWS-managed Postgres option that scales down to near-zero ACU when idle, matching sporadic access. |
 | `data/` local XML files | **S3** bucket (`pulso-raw-exports`) | Landing zone for uploaded Apple Health XML exports; source of the ETL trigger event. |
 | — (new) | **ECR**, 2 repositories (`pulso-dashboard`, `pulso-etl`) | Image registry for both app containers, integrates with existing GitHub Actions. |
-| Env vars (`DB_HOST`, `DB_PASSWORD`, ...) | **SSM Parameter Store** (SecureString) | Same role as today's env vars; free tier covers this scale (Secrets Manager would charge per secret for no added benefit here). |
+| Env vars (`DB_HOST`, `DB_PASSWORD`, ...) | **SSM Parameter Store** (SecureString, default `aws/ssm` KMS key — sufficient here, no custom CMK or rotation needed for a single-user setup) | Same role as today's env vars, **plus required Django production settings** (see §8): `DEBUG=false`, `SECRET_KEY`, `ALLOWED_HOSTS` set to the App Runner domain. Free tier covers this scale (Secrets Manager would charge per secret for no added benefit here). |
 | `metabase` service | **Removed** | Covered by the Django dashboard; not part of the target architecture. |
 
 ## 5. Data Flow
@@ -64,8 +64,14 @@ Aurora Serverless v2 (Postgres) ◀───────────────
 
 Key decisions:
 - **The large file never transits through App Runner/Django.** Django's only job in the upload path is issuing a presigned URL; the browser uploads straight to S3. This avoids App Runner request-size/timeout limits and keeps the app container stateless and small.
-- **No new state-tracking infrastructure.** The Fargate task writes its outcome (status, row counts, timestamp, error message on failure) into an `etl_run` table in the existing Postgres schema. The dashboard shows "last import: succeeded, 3.4M records, 2 days ago" via a normal query against a table it already has a connection to — no SQS/DynamoDB/extra polling mechanism needed for a single-user tool.
-- **Step Functions**, not a bare EventBridge→Lambda→RunTask call, because it gives free retry/failure-state handling for the batch job (e.g., mark the `etl_run` row as `failed` with an error message if the Fargate task exits non-zero) without hand-rolling that logic.
+- **No new state-tracking infrastructure.** The Fargate task itself writes its outcome (status, row counts, timestamp, error message on failure) into an `etl_run` table in the existing Postgres schema, wrapping the load in a try/except. The dashboard shows "last import: succeeded, 3.4M records, 2 days ago" via a normal query against a table it already has a connection to — no SQS/DynamoDB/extra polling mechanism needed for a single-user tool. (Step Functions itself has no Postgres integration — it only retries/observes the Fargate task's exit status; it does not write the `etl_run` row.)
+- **Step Functions**, not a bare EventBridge→Lambda→RunTask call, because it gives free retry/failure handling around the Fargate task (distinct from the ETL's own status writes above) without hand-rolling that logic. Concurrency is capped at 1 execution at a time, so two overlapping uploads can't load into the same tables simultaneously.
+
+**Upload-endpoint hardening (required, not optional).** §8 accepts the risk of an unauthenticated dashboard *read* path. Without the following, the upload path silently escalates that into a write/execute/cost exposure — anyone who has the URL could inject arbitrary data into the health database or repeatedly trigger billable Fargate/Aurora usage:
+- The endpoint that mints presigned URLs requires a static shared-secret header (a token only the owner has — simplest possible gate that doesn't require standing up `django.contrib.auth`).
+- Presigned PUT URLs are scoped tightly: fixed key prefix (`uploads/`), `content-length-range` capping object size (e.g. 3GB), and a short expiry (≤15 minutes).
+- The ETL task validates the XML root element (`<HealthData>`) before doing any batch inserts, and aborts (writing a `failed` `etl_run` row) if it doesn't match — a cheap guard against garbage/malicious payloads reaching the loader.
+- An AWS Budgets alarm (email/SNS) at a low monthly threshold (e.g. US$20) acts as a cost tripwire in case the above is ever bypassed.
 
 ### 5.2 Dashboard read path
 
@@ -73,9 +79,17 @@ App Runner reaches Aurora over a private connection via an **App Runner VPC Conn
 
 ## 6. Networking
 
-- Single VPC, two private subnets (different AZs) for Aurora and the ETL Fargate task's ENIs; App Runner attaches via its VPC Connector into the same private subnets to reach Aurora.
-- **No NAT Gateway.** Nothing in this architecture needs outbound access to the public internet: Django doesn't call external APIs, and the ETL task only talks to S3 and Aurora. An **S3 Gateway VPC Endpoint** (no hourly charge) covers S3 access from inside the VPC. Skipping the NAT Gateway avoids its ~US$32/month fixed cost — the single largest avoidable fixed cost in a small VPC, and the main reason a naive "just lift the docker-compose setup into a VPC" design would end up more expensive than necessary.
-- Security groups: Aurora's SG allows inbound Postgres (5432) only from the App Runner VPC Connector's SG and the ETL Fargate task's SG. No component gets a public IP except App Runner's managed public endpoint and S3 (already public by design, access controlled via bucket policy + presigned URLs).
+- Single VPC. Aurora sits in two private subnets (different AZs), `publicly_accessible=false`, no public endpoint. App Runner attaches via its VPC Connector into those same private subnets to reach Aurora.
+- **The ETL Fargate task runs in a public subnet** (with `assign_public_ip=true`, security group allowing no inbound at all) rather than a private one. This is a deliberate correction to the original "no NAT Gateway, everything private" idea: Fargate must reach ECR (`ecr.api`/`ecr.dkr`) and CloudWatch Logs to even start a task, and paying for interface VPC endpoints to cover that from a private subnet (~$7–10/month each, three-plus needed) would erase most of the NAT Gateway saving anyway. A public subnet with no inbound rule costs nothing extra and is proportionate for a single-user batch job that only reads from S3/ECR and writes to Aurora over the VPC.
+- **No NAT Gateway.** With the ETL task in a public subnet, nothing in this architecture needs one: Django doesn't call external APIs, and the ETL task's S3 access is covered by an **S3 Gateway VPC Endpoint** (no hourly charge). This still avoids the ~US$32/month NAT Gateway fixed cost.
+- Security groups: Aurora's SG allows inbound Postgres (5432) only from the App Runner VPC Connector's SG and the ETL Fargate task's SG — nothing else, no `0.0.0.0/0` rule anywhere. The App Runner VPC Connector's own egress is scoped to what it actually needs (Aurora); any AWS API call Django needs to make (e.g. presigned-URL signing, which only needs local SDK credentials, not network egress) doesn't require routing through the VPC.
+- **S3 bucket posture:** `pulso-raw-exports` has Block Public Access enabled on all four settings, default SSE-S3 (or SSE-KMS) encryption, and a bucket policy denying non-TLS requests. It is not "public by design" — presigned URLs grant time-boxed access to specific keys without making the bucket itself public. A lifecycle rule expires objects under `uploads/` after ~30 days (they're re-uploadable from the original export and this is a landing zone, not long-term storage).
+- **IAM roles (least privilege, one per component):**
+  - App Runner instance role: `ssm:GetParameter`/`GetParameters` on `/pulso/*` only, `s3:PutObject` on `pulso-raw-exports/uploads/*` only (for presigned-URL signing).
+  - ETL Fargate task role: `s3:GetObject` on `pulso-raw-exports/uploads/*` only; no S3 write, no other service access.
+  - ETL Fargate execution role: standard ECR pull + CloudWatch Logs write, scoped to the `pulso-etl` repository and its log group.
+  - Step Functions execution role: `ecs:RunTask` on the specific task definition + `iam:PassRole` restricted to the two ETL roles above — nothing broader.
+- **Aurora durability & encryption:** storage encryption enabled at creation (cannot be added retroactively), `deletion_protection=true`, automated backups retained (7 days is enough for personal use), a final snapshot on any future teardown, and `rds.force_ssl=1` (with `sslmode=require` in Django's connection string) so traffic to Aurora is encrypted even though it never leaves the VPC. This data is irreplaceable (a 3.4M-row Apple Health import), so these are non-negotiable rather than nice-to-haves, and all are free or near-free at this scale.
 
 ## 7. CI/CD & Deployment
 
@@ -94,8 +108,10 @@ The dashboard ships in v1 **without authentication**. App Runner's default endpo
 
 This was discussed explicitly and is a **deliberate, accepted trade-off for v1** to keep initial scope small, not an oversight. It's called out here so it isn't silently forgotten:
 
-- **Risk:** personal health data (workouts, heart rate, activity history) is reachable by anyone who discovers or guesses the App Runner URL.
-- **Mitigation deferred to future work** (see §12): the lowest-effort fix, if/when this is revisited, is adding `django.contrib.auth` with a single account and gating views with `login_required` — no new AWS infrastructure required.
+- **Risk (read):** personal health data (workouts, heart rate, activity history) is reachable by anyone who discovers or guesses the App Runner URL. Accepted as-is for v1.
+- **Risk (write/execute/cost) — not accepted, must be mitigated:** without any control, the same lack of auth would let anyone who has the URL upload arbitrary files (triggering the ETL pipeline repeatedly) or inject bad data into the health database — a materially larger exposure than "someone can view my data." This is why §5.1 requires a shared-secret header on the upload-signing endpoint, tightly-scoped presigned URLs, XML validation before load, single-concurrency Step Functions, and a Budgets cost tripwire — these are the minimum bar for shipping the upload feature at all, not optional hardening.
+- **Production config is part of closing this gap, not a separate concern:** `apps/dashboard-django/dashboard_project/settings.py` currently defaults `DEBUG` to `true` and `ALLOWED_HOSTS` to `localhost,127.0.0.1` when the env var is absent. Deployed to App Runner, a missing `DEBUG` env var means public stack traces and a full settings dump on every unhandled error. §4's SSM table now includes `DEBUG=false`, a real `SECRET_KEY`, and `ALLOWED_HOSTS` as required config — treat these as blocking for go-live, not follow-up work.
+- **Mitigation deferred to future work** (see §11): the lowest-effort fix for the accepted read risk, if/when it's revisited, is adding `django.contrib.auth` with a single account and gating views with `login_required` — no new AWS infrastructure required.
 
 ## 9. Cost Considerations (rough order of magnitude)
 
@@ -104,11 +120,14 @@ Not a committed budget, but the design decisions driving cost down:
 - **Aurora Serverless v2**: scales down when idle; cost is dominated by storage (a few GB, ~cents/month) plus compute only during the brief windows the dashboard or ETL is actually querying it.
 - **App Runner**: bills for provisioned+active compute; with auto-pause on idle, cost approaches its per-request/build cost rather than a 24/7 instance. (Verify auto-pause availability in the target region at implementation time — treat "always-on minimum instance" as the fallback cost assumption if unavailable.)
 - **Fargate ETL task**: pay-per-run only, on the order of cents per import (a handful of vCPU-minutes).
-- **No NAT Gateway**: avoids the ~US$32/month fixed cost that would otherwise dominate the bill for a low-traffic personal setup.
+- **No NAT Gateway**: avoids the ~US$32/month fixed cost that would otherwise dominate the bill for a low-traffic personal setup. Achieved by running the ETL task in a public subnet (§6) rather than paying for VPC interface endpoints as a private-subnet substitute — the latter would have cost more than the NAT Gateway it was meant to avoid.
 - **Parameter Store over Secrets Manager**: avoids per-secret monthly charges for config that doesn't need automatic rotation.
 - **S3, ECR, CloudWatch Logs**: negligible at this scale.
+- **AWS Budgets alarm** (§5.1/§8): a low-threshold cost tripwire, effectively free, as a backstop against the unauthenticated-upload-endpoint cost-DoS scenario.
 
 Expect a low-double-digit US$/month bill dominated by Aurora and App Runner baseline costs, not by data transfer or request volume.
+
+Note for the Terraform follow-on plan (§11): the Aurora master password will land in Terraform state regardless of whether it's sourced from SSM or generated by Terraform itself. The planned S3 state backend must have encryption and access restricted to the deployer — this is a Terraform hygiene item, not a new AWS resource.
 
 ## 10. Out of Scope
 
