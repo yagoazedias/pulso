@@ -47,7 +47,7 @@ docker compose up --build
 
 This will:
 - Start a PostgreSQL 17 instance
-- Build the Pulso uberjar
+- Build the Pulso Docker image
 - Run database migrations
 - Stream and load the entire XML export
 
@@ -155,15 +155,13 @@ Pulso uses GitHub Actions to automatically build, test, and verify code quality 
 - Runs on: Push to `master`, `main`, `develop` and all pull requests
 - Steps:
   1. Checkout code
-  2. Set up Java 21
-  3. Create PostgreSQL test database
-  4. Run syntax checks with `lein check`
-  5. Run unit tests (`lein with-profile +unit test`)
-  6. Run integration tests (`lein with-profile +integration test`)
-  7. Run combined test suite (`lein with-profile +unit,+integration test`)
-  8. Build uberjar
-  9. Upload build artifacts
-  10. Comment test results on pull requests
+  2. Install `uv` (via `astral-sh/setup-uv`)
+  3. Set up Python and install dependencies (`uv sync`)
+  4. Create PostgreSQL test database
+  5. Run unit tests (`uv run pytest -m "not integration"`)
+  6. Run integration tests (`uv run pytest -m integration`)
+  7. Run combined test suite (`uv run pytest`)
+  8. Comment test results on pull requests
 
 **Docker Build** (`.github/workflows/docker.yml`)
 - Runs on: Push to `master`, `main` and pull requests when Docker files change
@@ -220,8 +218,8 @@ Pulso uses a **single-pass streaming** approach to keep memory usage constant re
 **Key design decisions:**
 
 - **Streaming XML** via `xml.etree.ElementTree.iterparse` — each processed top-level child is removed from the root element's children list, so only one element is retained in memory at a time
-- **Lookup caching** — source, device, record type, and unit tables are cached in atoms (~50-100 unique values). Cache misses trigger `INSERT ON CONFLICT ... RETURNING id`
-- **Batch inserts** — records are accumulated in a buffer and flushed via `next.jdbc/execute-batch!` every 5,000 rows
+- **Lookup caching** — source, device, record type, and unit tables are cached in module-level dicts (~50-100 unique values). Cache misses trigger `INSERT ON CONFLICT ... RETURNING id`
+- **Batch inserts** — records are accumulated in a buffer and flushed via `psycopg2.extras.execute_batch` every 5,000 rows
 - **Idempotent loads** — all tables are truncated before each run (v1 strategy)
 
 ## Database Schema
